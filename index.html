@@ -3,51 +3,125 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Buku Kas Sederhana</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Buku Kas Sederhana - Sistem Bayar Kas Bulanan</title>
+    
+    <!-- Stylesheets -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-    <!-- Chart.js untuk grafik -->
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- JavaScript Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 </head>
-<body class="bg-gray-50 min-h-screen">
-    <div class="container mx-auto px-4 py-8">
+<body class="bg-gradient-to-br from-blue-50 via-white to-indigo-50 min-h-screen">
+    <!-- Notifikasi Popup -->
+    <div id="notificationPopup" class="fixed top-4 right-4 z-50 w-96 max-w-full hidden"></div>
+    
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-2xl p-8 flex flex-col items-center space-y-4 shadow-2xl">
+            <div class="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+            <div class="text-gray-700 font-semibold">Memproses...</div>
+            <div class="text-sm text-gray-500">Harap tunggu sebentar</div>
+        </div>
+    </div>
+
+    <!-- Header Notifikasi -->
+    <div id="headerNotification" class="fixed top-0 left-0 right-0 bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-3 text-center font-semibold shadow-lg transform -translate-y-full transition-transform duration-500 z-40">
+        <div class="container mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <i class="fas fa-bell animate-pulse"></i>
+                <span id="notificationMessage">Ada pembaruan data kas</span>
+            </div>
+            <button onclick="hideHeaderNotification()" class="text-white hover:text-gray-200">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="container mx-auto px-4 py-6">
         <!-- Header -->
-        <header class="bg-gradient-to-r from-blue-600 to-indigo-800 text-white rounded-xl shadow-lg p-6 mb-8 fade-in">
-            <div class="flex flex-col md:flex-row justify-between items-center">
-                <div>
-                    <h1 class="text-3xl font-bold mb-2">Buku Kas Sederhana</h1>
-                    <p class="text-blue-100">Sistem Bayar Kas Bulanan & Pengeluaran</p>
+        <header class="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-800 text-white rounded-2xl shadow-2xl p-6 mb-8 relative overflow-hidden animate-fade-in">
+            <div class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-32 translate-x-32"></div>
+            <div class="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-24 -translate-x-24"></div>
+            
+            <div class="relative z-10">
+                <div class="flex flex-col md:flex-row justify-between items-center">
+                    <div class="mb-6 md:mb-0">
+                        <div class="flex items-center space-x-3 mb-3">
+                            <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                                <i class="fas fa-wallet text-2xl"></i>
+                            </div>
+                            <div>
+                                <h1 class="text-3xl md:text-4xl font-bold mb-1">Buku Kas Digital</h1>
+                                <p class="text-blue-100 text-sm md:text-base">Sistem Bayar Kas Bulanan & Pengeluaran</p>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 mt-4">
+                            <div class="bg-white/20 px-3 py-1.5 rounded-lg text-sm">
+                                <i class="fas fa-calendar-alt mr-2"></i>
+                                <span id="currentMonthYear">Januari 2024</span>
+                            </div>
+                            <div class="bg-green-500/90 px-3 py-1.5 rounded-lg text-sm">
+                                <i class="fas fa-wallet mr-2"></i>
+                                Kas: <span id="kasAmountDisplay">Rp 10.000</span>
+                            </div>
+                            <div id="saldoAwalBadge" class="bg-purple-500/90 px-3 py-1.5 rounded-lg text-sm hidden">
+                                <i class="fas fa-piggy-bank mr-2"></i>
+                                Saldo Awal: <span id="saldoAwalAmount">Rp 0</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-wrap gap-3">
+                        <button id="notificationBell" class="relative bg-yellow-500 hover:bg-yellow-600 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 transform hover:scale-105 shadow-lg">
+                            <i class="fas fa-bell mr-2"></i> Notifikasi
+                            <span id="notificationCount" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center animate-pulse hidden">0</span>
+                        </button>
+                        <button id="quickIncomeBtn" class="bg-emerald-500 hover:bg-emerald-600 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 transform hover:scale-105 shadow-lg">
+                            <i class="fas fa-plus-circle mr-2"></i> Pemasukan Cepat
+                        </button>
+                        <button id="settingsBtn" class="bg-violet-500 hover:bg-violet-600 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 transform hover:scale-105 shadow-lg">
+                            <i class="fas fa-cog mr-2"></i> Pengaturan
+                        </button>
+                    </div>
                 </div>
-                <div class="flex flex-wrap gap-4 mt-4 md:mt-0">
-                    <div class="bg-blue-500 px-4 py-2 rounded-full text-sm">
-                        <i class="fas fa-calendar mr-2"></i>
-                        <span id="currentMonthYear"></span>
+                
+                <!-- Progress Bar Kas Bulan Ini -->
+                <div class="mt-6 bg-white/10 rounded-xl p-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="text-sm font-medium">Progress Kas Bulan Ini</div>
+                        <div class="text-sm" id="progressPercentage">0%</div>
                     </div>
-                    <div class="bg-green-500 px-4 py-2 rounded-full text-sm">
-                        <i class="fas fa-wallet mr-2"></i>
-                        Kas: <span id="kasAmountDisplay">Rp 10.000</span>
+                    <div class="w-full bg-white/20 rounded-full h-3">
+                        <div id="progressBar" class="bg-gradient-to-r from-green-400 to-emerald-500 h-3 rounded-full transition-all duration-1000" style="width: 0%"></div>
                     </div>
-                    <button id="settingsBtn" class="bg-purple-500 hover:bg-purple-600 px-4 py-2 rounded-full text-sm transition duration-200">
-                        <i class="fas fa-cog mr-2"></i> Pengaturan
-                    </button>
+                    <div class="flex justify-between text-xs mt-2">
+                        <span id="paidCount">0 anak sudah bayar</span>
+                        <span id="totalChildren">Total: 0 anak</span>
+                    </div>
                 </div>
             </div>
         </header>
 
         <!-- Pencarian & Filter -->
-        <div class="bg-white rounded-xl shadow-md p-4 mb-6 fade-in">
+        <div class="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl p-5 mb-8 animate-fade-in">
             <div class="flex flex-col lg:flex-row gap-4 justify-between items-center">
                 <div class="flex-1 w-full">
-                    <div class="relative">
-                        <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
-                        <input type="text" id="searchInput" placeholder="Cari transaksi atau anak..." class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <div class="relative group">
+                        <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors"></i>
+                        <input type="text" id="searchInput" placeholder="Cari transaksi, nama anak, atau keterangan..." 
+                               class="w-full pl-12 pr-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-700 placeholder-gray-400 shadow-sm">
                     </div>
                 </div>
                 <div class="flex flex-wrap gap-3">
-                    <select id="filterMonth" class="p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <option value="all">Semua Bulan</option>
+                    <select id="filterMonth" class="px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-700 shadow-sm">
+                        <option value="all">📅 Semua Bulan</option>
                         <option value="Januari">Januari</option>
                         <option value="Februari">Februari</option>
                         <option value="Maret">Maret</option>
@@ -61,121 +135,217 @@
                         <option value="November">November</option>
                         <option value="Desember">Desember</option>
                     </select>
-                    <select id="filterYear" class="p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <select id="filterYear" class="px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-700 shadow-sm">
                         <!-- Options akan diisi oleh JavaScript -->
                     </select>
-                    <select id="sortBy" class="p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <option value="date-desc">Terbaru</option>
-                        <option value="date-asc">Terlama</option>
-                        <option value="amount-desc">Jumlah Tertinggi</option>
-                        <option value="amount-asc">Jumlah Terendah</option>
-                        <option value="name-asc">Nama A-Z</option>
-                        <option value="name-desc">Nama Z-A</option>
+                    <select id="sortBy" class="px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-700 shadow-sm">
+                        <option value="date-desc">📅 Terbaru</option>
+                        <option value="date-asc">📅 Terlama</option>
+                        <option value="amount-desc">💰 Tertinggi</option>
+                        <option value="amount-asc">💰 Terendah</option>
+                        <option value="name-asc">👤 A-Z</option>
+                        <option value="name-desc">👤 Z-A</option>
                     </select>
-                    <button id="applyFilter" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition duration-200">
-                        <i class="fas fa-check mr-1"></i> Terapkan
+                    <button id="applyFilter" class="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-5 py-3 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 shadow-lg">
+                        <i class="fas fa-check mr-2"></i> Terapkan
                     </button>
-                    <button id="resetFilter" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md transition duration-200">
-                        <i class="fas fa-refresh mr-1"></i> Reset
+                    <button id="resetFilter" class="bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white px-5 py-3 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 shadow-lg">
+                        <i class="fas fa-refresh mr-2"></i> Reset
                     </button>
                 </div>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <!-- Sidebar Kiri -->
-            <div class="lg:col-span-1 space-y-6">
+            <div class="lg:col-span-1 space-y-8">
                 <!-- Form Tambah Anak -->
-                <div class="bg-white rounded-xl shadow-md p-6 fade-in">
-                    <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">
-                        <i class="fas fa-user-plus mr-2 text-blue-600"></i>Manajemen Anak
+                <div class="bg-white rounded-2xl shadow-xl p-6 animate-fade-in">
+                    <h2 class="text-xl font-bold mb-6 text-gray-800 border-b pb-4">
+                        <i class="fas fa-user-plus mr-3 text-blue-600"></i>Tambah Anak Baru
                     </h2>
-                    <form id="childForm" class="space-y-4">
+                    <form id="childForm" class="space-y-5">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Nama Anak</label>
-                            <input type="text" id="childNameInput" placeholder="Nama lengkap anak" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" required>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                <i class="fas fa-user mr-2"></i>Nama Lengkap Anak
+                            </label>
+                            <input type="text" id="childNameInput" placeholder="Masukkan nama anak" 
+                                   class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-700 placeholder-gray-400 shadow-sm" required>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Kelas/Group (opsional)</label>
-                            <input type="text" id="childClassInput" placeholder="Contoh: Kelas A, Group 1" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                <i class="fas fa-users mr-2"></i>Kelas/Group (opsional)
+                            </label>
+                            <input type="text" id="childClassInput" placeholder="Contoh: Kelas A, Group 1" 
+                                   class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-700 placeholder-gray-400 shadow-sm">
                         </div>
-                        <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition duration-200 flex items-center justify-center">
-                            <i class="fas fa-user-plus mr-2"></i> Tambah Anak
+                        <button type="submit" class="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold py-3.5 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg flex items-center justify-center">
+                            <i class="fas fa-user-plus mr-3"></i> Tambahkan Anak
                         </button>
                     </form>
                 </div>
 
+                <!-- Info Saldo Awal -->
+                <div id="initialBalanceContainer" class="bg-gradient-to-br from-purple-50 to-violet-100 rounded-2xl shadow-xl p-6 animate-fade-in hidden">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-violet-600 rounded-xl flex items-center justify-center shadow-lg">
+                                <i class="fas fa-piggy-bank text-white text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-gray-800 text-lg">Saldo Awal</h3>
+                                <p class="text-sm text-gray-600" id="initialBalanceMonth">Bulan</p>
+                            </div>
+                        </div>
+                        <span class="bg-gradient-to-r from-purple-500 to-violet-600 text-white text-xs font-bold px-3 py-1.5 rounded-full">
+                            Saldo
+                        </span>
+                    </div>
+                    <div class="mb-6">
+                        <p class="text-3xl font-bold text-purple-700" id="initialBalanceAmount">Rp 0</p>
+                        <p class="text-sm text-gray-600 mt-2" id="initialBalanceNote">Saldo awal bulan</p>
+                    </div>
+                    <button onclick="editInitialBalance()" class="w-full bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg flex items-center justify-center">
+                        <i class="fas fa-edit mr-3"></i> Atur Saldo Awal
+                    </button>
+                </div>
+
                 <!-- Daftar Anak -->
-                <div class="bg-white rounded-xl shadow-md p-6 fade-in">
-                    <div class="flex justify-between items-center mb-4">
+                <div class="bg-white rounded-2xl shadow-xl p-6 animate-fade-in">
+                    <div class="flex justify-between items-center mb-6">
                         <h2 class="text-xl font-bold text-gray-800">
-                            <i class="fas fa-users mr-2 text-blue-600"></i>Daftar Anak
+                            <i class="fas fa-users mr-3 text-blue-600"></i>Daftar Anak
                         </h2>
-                        <span class="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full" id="childCount">0 Anak</span>
+                        <span class="bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-bold px-4 py-1.5 rounded-full shadow-sm" id="childCount">
+                            0 Anak
+                        </span>
                     </div>
                     
-                    <div class="space-y-3 max-h-96 overflow-y-auto pr-2 custom-scrollbar" id="childrenListContainer">
-                        <div id="emptyChildren" class="text-center py-8 text-gray-500">
-                            <i class="fas fa-child text-4xl mb-2 text-gray-300"></i>
-                            <p>Belum ada anak. Tambahkan anak terlebih dahulu!</p>
+                    <div class="space-y-4 max-h-96 overflow-y-auto pr-2 custom-scrollbar" id="childrenListContainer">
+                        <div id="emptyChildren" class="text-center py-10 text-gray-500">
+                            <div class="w-20 h-20 bg-gradient-to-br from-blue-100 to-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i class="fas fa-child text-3xl text-blue-300"></i>
+                            </div>
+                            <p class="text-gray-500 font-medium mb-2">Belum ada anak terdaftar</p>
+                            <p class="text-sm text-gray-400">Tambahkan anak terlebih dahulu menggunakan form di atas</p>
                         </div>
                     </div>
 
                     <!-- Tombol Bayar Kas untuk Semua -->
-                    <div class="mt-6 pt-4 border-t border-gray-200">
-                        <button id="payAllKas" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-md transition duration-200 flex items-center justify-center">
-                            <i class="fas fa-money-bill-wave mr-2"></i> Bayar Kas Semua Anak
+                    <div class="mt-8 pt-6 border-t border-gray-100">
+                        <button id="payAllKas" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-4 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fas fa-money-bill-wave mr-3"></i> Bayar Kas Semua Anak
                         </button>
-                        <p class="text-xs text-gray-500 text-center mt-2" id="kasAmountText">Rp 10.000 per anak per bulan</p>
+                        <p class="text-xs text-gray-500 text-center mt-3" id="kasAmountText">Rp 10.000 per anak per bulan</p>
                     </div>
                 </div>
 
-                <!-- Ringkasan -->
-                <div class="bg-white rounded-xl shadow-md p-6 fade-in">
-                    <h3 class="font-bold text-lg mb-4 text-gray-800 border-b pb-2">
-                        <i class="fas fa-chart-pie mr-2 text-blue-600"></i>Ringkasan <span id="summaryMonth"></span>
+                <!-- Ringkasan Keuangan -->
+                <div class="bg-white rounded-2xl shadow-xl p-6 animate-fade-in">
+                    <h3 class="font-bold text-xl mb-6 text-gray-800 border-b pb-4">
+                        <i class="fas fa-chart-pie mr-3 text-blue-600"></i>Ringkasan <span id="summaryMonth">Bulan Ini</span>
                     </h3>
-                    <div class="space-y-4">
-                        <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
+                    <div class="space-y-5">
+                        <!-- Kas Masuk -->
+                        <div class="flex items-center justify-between p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">
                             <div class="flex items-center">
-                                <div class="bg-green-100 p-2 rounded-lg mr-3">
-                                    <i class="fas fa-money-bill-trend-up text-green-600"></i>
+                                <div class="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-lg flex items-center justify-center mr-4 shadow-sm">
+                                    <i class="fas fa-money-bill-wave text-white"></i>
                                 </div>
                                 <div>
-                                    <p class="text-sm text-green-700">Total Kas Masuk</p>
-                                    <p class="text-xl font-bold text-green-800" id="totalIncome">Rp 0</p>
+                                    <p class="text-sm text-green-700 font-medium">Total Kas Masuk</p>
+                                    <p class="text-2xl font-bold text-green-800" id="totalKasIncome">Rp 0</p>
                                 </div>
                             </div>
-                        </div>
-                        <div class="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
-                            <div class="flex items-center">
-                                <div class="bg-red-100 p-2 rounded-lg mr-3">
-                                    <i class="fas fa-money-bill-transfer text-red-600"></i>
-                                </div>
-                                <div>
-                                    <p class="text-sm text-red-700">Total Pengeluaran</p>
-                                    <p class="text-xl font-bold text-red-800" id="totalExpense">Rp 0</p>
-                                </div>
+                            <div class="text-right">
+                                <div class="text-xs text-green-600 font-medium">Dari anak</div>
+                                <div class="text-sm text-green-500" id="kasChildCount">0 anak</div>
                             </div>
                         </div>
-                        <div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        
+                        <!-- Pemasukan Lain -->
+                        <div class="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-200">
                             <div class="flex items-center">
-                                <div class="bg-blue-100 p-2 rounded-lg mr-3">
-                                    <i class="fas fa-piggy-bank text-blue-600"></i>
+                                <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center mr-4 shadow-sm">
+                                    <i class="fas fa-plus-circle text-white"></i>
                                 </div>
                                 <div>
-                                    <p class="text-sm text-blue-700">Saldo Kas</p>
-                                    <p class="text-xl font-bold text-blue-800" id="balance">Rp 0</p>
+                                    <p class="text-sm text-blue-700 font-medium">Pemasukan Lain</p>
+                                    <p class="text-2xl font-bold text-blue-800" id="totalOtherIncome">Rp 0</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xs text-blue-600 font-medium">Tambahan</div>
+                                <div class="text-sm text-blue-500" id="otherIncomeCount">0 transaksi</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Pengeluaran -->
+                        <div class="flex items-center justify-between p-4 bg-gradient-to-r from-red-50 to-rose-50 rounded-xl border border-red-200">
+                            <div class="flex items-center">
+                                <div class="w-12 h-12 bg-gradient-to-br from-red-500 to-rose-500 rounded-lg flex items-center justify-center mr-4 shadow-sm">
+                                    <i class="fas fa-money-bill-transfer text-white"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-red-700 font-medium">Total Pengeluaran</p>
+                                    <p class="text-2xl font-bold text-red-800" id="totalExpense">Rp 0</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xs text-red-600 font-medium">Dikeluarkan</div>
+                                <div class="text-sm text-red-500" id="expenseCount">0 transaksi</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Total Pemasukan -->
+                        <div class="flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-violet-50 rounded-xl border border-purple-200">
+                            <div class="flex items-center">
+                                <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-violet-500 rounded-lg flex items-center justify-center mr-4 shadow-sm">
+                                    <i class="fas fa-piggy-bank text-white"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-purple-700 font-medium">Total Pemasukan</p>
+                                    <p class="text-2xl font-bold text-purple-800" id="totalIncome">Rp 0</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xs text-purple-600 font-medium">Semua sumber</div>
+                                <div class="text-sm text-purple-500" id="totalIncomeCount">0 transaksi</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Saldo Akhir -->
+                        <div class="flex items-center justify-between p-4 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl border border-indigo-200">
+                            <div class="flex items-center">
+                                <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-blue-500 rounded-lg flex items-center justify-center mr-4 shadow-sm">
+                                    <i class="fas fa-balance-scale text-white"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-indigo-700 font-medium">Saldo Akhir</p>
+                                    <p class="text-2xl font-bold text-indigo-800" id="balance">Rp 0</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xs text-indigo-600 font-medium">Saat ini</div>
+                                <div class="text-sm" id="balanceStatus">
+                                    <span class="text-green-600">Sehat</span>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="mt-4 pt-4 border-t border-gray-200 text-center">
-                        <p class="text-sm text-gray-600" id="summaryInfo">Data untuk bulan terpilih</p>
-                        <div id="saldoWarning" class="hidden mt-2 p-2 bg-red-100 border border-red-300 rounded-lg">
-                            <p class="text-red-700 text-sm font-medium">
-                                <i class="fas fa-exclamation-triangle mr-1"></i>
+                    
+                    <div class="mt-6 pt-6 border-t border-gray-100 text-center">
+                        <p class="text-sm text-gray-600 mb-3" id="summaryInfo">Data untuk bulan terpilih</p>
+                        <div id="saldoWarning" class="hidden p-3 bg-gradient-to-r from-red-50 to-rose-50 border border-red-200 rounded-xl">
+                            <p class="text-red-700 text-sm font-medium flex items-center justify-center">
+                                <i class="fas fa-exclamation-triangle mr-2"></i>
                                 Saldo minus! Periksa pengeluaran Anda.
+                            </p>
+                        </div>
+                        <div id="saldoHealthy" class="hidden p-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl">
+                            <p class="text-green-700 text-sm font-medium flex items-center justify-center">
+                                <i class="fas fa-check-circle mr-2"></i>
+                                Saldo sehat, keuangan terkendali.
                             </p>
                         </div>
                     </div>
@@ -183,123 +353,238 @@
             </div>
             
             <!-- Konten Utama -->
-            <div class="lg:col-span-2 space-y-6">
+            <div class="lg:col-span-2 space-y-8">
                 <!-- Grafik & Visualisasi -->
-                <div class="bg-white rounded-xl shadow-md p-6 fade-in">
-                    <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">
-                        <i class="fas fa-chart-bar mr-2 text-purple-600"></i>Grafik & Statistik
+                <div class="bg-white rounded-2xl shadow-xl p-6 animate-fade-in">
+                    <h2 class="text-xl font-bold mb-6 text-gray-800 border-b pb-4">
+                        <i class="fas fa-chart-bar mr-3 text-purple-600"></i>Grafik & Statistik
                     </h2>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <canvas id="kasChart" width="400" height="200"></canvas>
-                            <p class="text-center text-sm text-gray-600 mt-2">Kas Masuk per Bulan</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div class="bg-gradient-to-br from-gray-50 to-white p-4 rounded-xl border border-gray-100">
+                            <canvas id="kasChart" width="400" height="250"></canvas>
+                            <p class="text-center text-sm text-gray-600 mt-4 font-medium">Kas Masuk per Bulan</p>
                         </div>
-                        <div>
-                            <canvas id="expenseChart" width="400" height="200"></canvas>
-                            <p class="text-center text-sm text-gray-600 mt-2">Jenis Pengeluaran</p>
+                        <div class="bg-gradient-to-br from-gray-50 to-white p-4 rounded-xl border border-gray-100">
+                            <canvas id="expenseChart" width="400" height="250"></canvas>
+                            <p class="text-center text-sm text-gray-600 mt-4 font-medium">Jenis Pengeluaran</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Mini Stats -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+                        <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl border border-blue-200">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm text-blue-700 font-medium">Rata-rata Kas</p>
+                                    <p class="text-xl font-bold text-blue-800" id="averageKas">Rp 0</p>
+                                </div>
+                                <i class="fas fa-chart-line text-blue-500 text-xl"></i>
+                            </div>
+                        </div>
+                        <div class="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl border border-green-200">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm text-green-700 font-medium">Bulan Tertinggi</p>
+                                    <p class="text-xl font-bold text-green-800" id="highestMonth">-</p>
+                                </div>
+                                <i class="fas fa-trophy text-green-500 text-xl"></i>
+                            </div>
+                        </div>
+                        <div class="bg-gradient-to-br from-red-50 to-red-100 p-4 rounded-xl border border-red-200">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm text-red-700 font-medium">Pengeluaran Terbesar</p>
+                                    <p class="text-xl font-bold text-red-800" id="largestExpense">Rp 0</p>
+                                </div>
+                                <i class="fas fa-exclamation-triangle text-red-500 text-xl"></i>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Form Pengeluaran -->
-                <div class="bg-white rounded-xl shadow-md p-6 fade-in">
-                    <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">
-                        <i class="fas fa-money-bill-wave mr-2 text-red-600"></i>Pengeluaran Kas
-                    </h2>
-                    <form id="expenseForm" class="space-y-4">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Jumlah Pengeluaran</label>
-                                <div class="relative">
-                                    <span class="absolute left-3 top-2 text-gray-500">Rp</span>
-                                    <input type="number" id="expenseAmount" placeholder="0" class="w-full pl-10 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" required>
+                <!-- Form Pengeluaran & Pemasukan -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Form Pengeluaran -->
+                    <div class="bg-white rounded-2xl shadow-xl p-6 animate-fade-in">
+                        <h2 class="text-xl font-bold mb-6 text-gray-800 border-b pb-4">
+                            <i class="fas fa-money-bill-wave mr-3 text-red-600"></i>Catat Pengeluaran
+                        </h2>
+                        <form id="expenseForm" class="space-y-5">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                        <i class="fas fa-money-bill mr-2"></i>Jumlah Pengeluaran
+                                    </label>
+                                    <div class="relative">
+                                        <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">Rp</span>
+                                        <input type="number" id="expenseAmount" placeholder="0" 
+                                               class="w-full pl-12 pr-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 transition-all duration-300 text-gray-700 placeholder-gray-400 shadow-sm" required>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                        <i class="fas fa-calendar mr-2"></i>Tanggal
+                                    </label>
+                                    <input type="date" id="expenseDate" 
+                                           class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 transition-all duration-300 text-gray-700 shadow-sm" required>
                                 </div>
                             </div>
+                            
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal</label>
-                                <input type="date" id="expenseDate" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" required>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    <i class="fas fa-tags mr-2"></i>Kategori Pengeluaran
+                                </label>
+                                <select id="expenseCategory" 
+                                        class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 transition-all duration-300 text-gray-700 shadow-sm">
+                                    <option value="Operasional">📋 Operasional</option>
+                                    <option value="Kebutuhan">🛒 Kebutuhan</option>
+                                    <option value="Acara">🎉 Acara/Kegiatan</option>
+                                    <option value="Lainnya">📦 Lainnya</option>
+                                </select>
                             </div>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Kategori Pengeluaran</label>
-                            <select id="expenseCategory" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="Operasional">Operasional</option>
-                                <option value="Kebutuhan">Kebutuhan</option>
-                                <option value="Acara">Acara/Kegiatan</option>
-                                <option value="Lainnya">Lainnya</option>
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Keterangan Pengeluaran</label>
-                            <textarea id="expenseNote" placeholder="Untuk apa pengeluaran ini?" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" rows="2" required></textarea>
-                        </div>
-                        
-                        <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md transition duration-200 flex items-center justify-center">
-                            <i class="fas fa-save mr-2"></i> Catat Pengeluaran
-                        </button>
-                    </form>
+                            
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    <i class="fas fa-sticky-note mr-2"></i>Keterangan Pengeluaran
+                                </label>
+                                <textarea id="expenseNote" placeholder="Untuk apa pengeluaran ini?" 
+                                          class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-red-500/20 focus:border-red-500 transition-all duration-300 text-gray-700 placeholder-gray-400 shadow-sm" rows="2" required></textarea>
+                            </div>
+                            
+                            <button type="submit" class="w-full bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-semibold py-3.5 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg flex items-center justify-center">
+                                <i class="fas fa-save mr-3"></i> Simpan Pengeluaran
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Form Pemasukan Lain -->
+                    <div class="bg-white rounded-2xl shadow-xl p-6 animate-fade-in">
+                        <h2 class="text-xl font-bold mb-6 text-gray-800 border-b pb-4">
+                            <i class="fas fa-money-bill-wave mr-3 text-green-600"></i>Pemasukan Lain
+                        </h2>
+                        <form id="otherIncomeForm" class="space-y-5">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                        <i class="fas fa-money-bill mr-2"></i>Jumlah Pemasukan
+                                    </label>
+                                    <div class="relative">
+                                        <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">Rp</span>
+                                        <input type="number" id="otherIncomeAmount" placeholder="0" 
+                                               class="w-full pl-12 pr-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-500/20 focus:border-green-500 transition-all duration-300 text-gray-700 placeholder-gray-400 shadow-sm" required>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                        <i class="fas fa-calendar mr-2"></i>Tanggal
+                                    </label>
+                                    <input type="date" id="otherIncomeDate" 
+                                           class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-500/20 focus:border-green-500 transition-all duration-300 text-gray-700 shadow-sm" required>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    <i class="fas fa-tags mr-2"></i>Kategori Pemasukan
+                                </label>
+                                <select id="otherIncomeCategory" 
+                                        class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-500/20 focus:border-green-500 transition-all duration-300 text-gray-700 shadow-sm">
+                                    <option value="Donasi">🤝 Donasi</option>
+                                    <option value="Sponsor">🏢 Sponsor</option>
+                                    <option value="Bantuan">🆘 Bantuan</option>
+                                    <option value="Lainnya">📦 Lainnya</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    <i class="fas fa-sticky-note mr-2"></i>Keterangan Pemasukan
+                                </label>
+                                <textarea id="otherIncomeNote" placeholder="Sumber pemasukan" 
+                                          class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-500/20 focus:border-green-500 transition-all duration-300 text-gray-700 placeholder-gray-400 shadow-sm" rows="2" required></textarea>
+                            </div>
+                            
+                            <button type="submit" class="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold py-3.5 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg flex items-center justify-center">
+                                <i class="fas fa-plus-circle mr-3"></i> Tambah Pemasukan
+                            </button>
+                        </form>
+                    </div>
                 </div>
 
                 <!-- Export Data -->
-                <div class="bg-white rounded-xl shadow-md p-6 fade-in">
-                    <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">
-                        <i class="fas fa-download mr-2 text-green-600"></i>Export Data
+                <div class="bg-white rounded-2xl shadow-xl p-6 animate-fade-in">
+                    <h2 class="text-xl font-bold mb-6 text-gray-800 border-b pb-4">
+                        <i class="fas fa-download mr-3 text-green-600"></i>Export Data & Laporan
                     </h2>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                        <button id="exportExcel" class="bg-green-600 hover:bg-green-700 text-white p-3 rounded-lg transition duration-200 flex flex-col items-center justify-center">
-                            <i class="fas fa-file-excel text-2xl mb-2"></i>
-                            <span class="text-sm">Export Excel</span>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <button id="exportExcel" class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white p-5 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg flex flex-col items-center justify-center group">
+                            <i class="fas fa-file-excel text-3xl mb-3 group-hover:scale-110 transition-transform"></i>
+                            <span class="font-semibold">Export Excel</span>
+                            <span class="text-xs opacity-80 mt-1">Format .xlsx</span>
                         </button>
-                        <button id="exportPDF" class="bg-red-600 hover:bg-red-700 text-white p-3 rounded-lg transition duration-200 flex flex-col items-center justify-center">
-                            <i class="fas fa-file-pdf text-2xl mb-2"></i>
-                            <span class="text-sm">Export PDF</span>
+                        <button id="exportPDF" class="bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white p-5 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg flex flex-col items-center justify-center group">
+                            <i class="fas fa-file-pdf text-3xl mb-3 group-hover:scale-110 transition-transform"></i>
+                            <span class="font-semibold">Export PDF</span>
+                            <span class="text-xs opacity-80 mt-1">Format .pdf</span>
                         </button>
-                        <button id="exportWord" class="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg transition duration-200 flex flex-col items-center justify-center">
-                            <i class="fas fa-file-word text-2xl mb-2"></i>
-                            <span class="text-sm">Export Word</span>
+                        <button id="exportWord" class="bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white p-5 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg flex flex-col items-center justify-center group">
+                            <i class="fas fa-file-word text-3xl mb-3 group-hover:scale-110 transition-transform"></i>
+                            <span class="font-semibold">Export Word</span>
+                            <span class="text-xs opacity-80 mt-1">Format .doc</span>
                         </button>
-                        <button id="sendWA" class="bg-green-500 hover:bg-green-600 text-white p-3 rounded-lg transition duration-200 flex flex-col items-center justify-center">
-                            <i class="fab fa-whatsapp text-2xl mb-2"></i>
-                            <span class="text-sm">Kirim WA</span>
+                        <button id="sendWA" class="bg-gradient-to-r from-green-400 to-emerald-500 hover:from-green-500 hover:to-emerald-600 text-white p-5 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-lg flex flex-col items-center justify-center group">
+                            <i class="fab fa-whatsapp text-3xl mb-3 group-hover:scale-110 transition-transform"></i>
+                            <span class="font-semibold">Kirim WA</span>
+                            <span class="text-xs opacity-80 mt-1">Laporan via WhatsApp</span>
                         </button>
                     </div>
-                    <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                        <p class="text-sm text-yellow-800 text-center">
-                            <i class="fas fa-info-circle mr-1"></i>
+                    <div class="mt-6 p-4 bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-xl">
+                        <p class="text-sm text-yellow-800 text-center flex items-center justify-center">
+                            <i class="fas fa-info-circle mr-2"></i>
                             Data akan diexport berdasarkan filter bulan & tahun yang aktif
                         </p>
                     </div>
                 </div>
 
                 <!-- Data Uang Masuk per Bulan -->
-                <div class="bg-white rounded-xl shadow-md p-6 fade-in">
-                    <div class="flex justify-between items-center mb-6">
+                <div class="bg-white rounded-2xl shadow-xl p-6 animate-fade-in">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                         <h2 class="text-xl font-bold text-gray-800">
-                            <i class="fas fa-chart-bar mr-2 text-green-600"></i>Data Uang Masuk per Bulan
+                            <i class="fas fa-chart-line mr-3 text-green-600"></i>Data Uang Masuk per Bulan
                         </h2>
-                        <div class="text-sm text-gray-600">
-                            <span id="monthlyDataInfo">Menampilkan semua data</span>
+                        <div class="flex items-center space-x-3">
+                            <div class="text-sm text-gray-600 bg-gray-100 px-3 py-1.5 rounded-lg">
+                                <i class="fas fa-filter mr-1"></i>
+                                <span id="monthlyDataInfo">Semua data</span>
+                            </div>
+                            <button onclick="refreshMonthlyData()" class="text-blue-500 hover:text-blue-700 p-2 hover:bg-blue-50 rounded-lg transition duration-200">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
                         </div>
                     </div>
                     
-                    <div class="overflow-x-auto">
+                    <div class="overflow-x-auto rounded-xl border border-gray-200">
                         <table class="w-full">
                             <thead>
-                                <tr class="bg-gray-100 text-gray-700 text-sm uppercase">
-                                    <th class="py-3 px-4 text-left rounded-l-lg">Bulan</th>
-                                    <th class="py-3 px-4 text-left">Jumlah Anak</th>
-                                    <th class="py-3 px-4 text-left">Total Kas</th>
-                                    <th class="py-3 px-4 text-left">Status</th>
-                                    <th class="py-3 px-4 text-left rounded-r-lg">Aksi</th>
+                                <tr class="bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 text-sm uppercase">
+                                    <th class="py-4 px-6 text-left rounded-tl-xl">Bulan</th>
+                                    <th class="py-4 px-6 text-left">Jumlah Anak</th>
+                                    <th class="py-4 px-6 text-left">Total Kas</th>
+                                    <th class="py-4 px-6 text-left">Pemasukan Lain</th>
+                                    <th class="py-4 px-6 text-left">Saldo Awal</th>
+                                    <th class="py-4 px-6 text-left">Total</th>
+                                    <th class="py-4 px-6 text-left">Status</th>
+                                    <th class="py-4 px-6 text-left rounded-tr-xl">Aksi</th>
                                 </tr>
                             </thead>
-                            <tbody id="monthlyData" class="text-gray-600">
+                            <tbody id="monthlyData" class="text-gray-600 divide-y divide-gray-100">
                                 <tr id="emptyMonthly">
-                                    <td colspan="5" class="py-8 text-center text-gray-500">
-                                        <i class="fas fa-calendar-times text-4xl mb-2 text-gray-300"></i>
-                                        <p>Belum ada data kas bulanan.</p>
+                                    <td colspan="8" class="py-12 text-center text-gray-500">
+                                        <div class="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <i class="fas fa-calendar-times text-3xl text-gray-300"></i>
+                                        </div>
+                                        <p class="text-gray-500 font-medium mb-2">Belum ada data kas bulanan</p>
+                                        <p class="text-sm text-gray-400">Mulai dengan menambahkan anak dan mencatat pembayaran kas</p>
                                     </td>
                                 </tr>
                             </tbody>
@@ -308,71 +593,135 @@
                 </div>
 
                 <!-- Riwayat Transaksi -->
-                <div class="bg-white rounded-xl shadow-md p-6 fade-in">
-                    <div class="flex justify-between items-center mb-6">
+                <div class="bg-white rounded-2xl shadow-xl p-6 animate-fade-in">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                         <h2 class="text-xl font-bold text-gray-800">
-                            <i class="fas fa-history mr-2 text-purple-600"></i>Riwayat Transaksi
+                            <i class="fas fa-history mr-3 text-purple-600"></i>Riwayat Transaksi
                         </h2>
-                        <div class="flex space-x-2">
-                            <button id="clearAll" class="bg-red-100 text-red-700 px-3 py-1 rounded-md text-sm font-medium hover:bg-red-200 transition duration-200">
-                                <i class="fas fa-trash mr-1"></i> Hapus Semua
+                        <div class="flex flex-wrap gap-2">
+                            <button id="showAllTransactions" class="bg-gradient-to-r from-blue-100 to-blue-50 text-blue-700 px-3 py-2 rounded-lg text-sm font-semibold hover:from-blue-200 hover:to-blue-100 transition-all duration-300 border border-blue-200">
+                                <i class="fas fa-eye mr-2"></i> Semua
+                            </button>
+                            <button id="showKasOnly" class="bg-gradient-to-r from-green-100 to-green-50 text-green-700 px-3 py-2 rounded-lg text-sm font-semibold hover:from-green-200 hover:to-green-100 transition-all duration-300 border border-green-200">
+                                <i class="fas fa-money-bill mr-2"></i> Kas Saja
+                            </button>
+                            <button id="showIncomeOnly" class="bg-gradient-to-r from-blue-100 to-cyan-50 text-blue-700 px-3 py-2 rounded-lg text-sm font-semibold hover:from-blue-200 hover:to-cyan-100 transition-all duration-300 border border-blue-200">
+                                <i class="fas fa-plus-circle mr-2"></i> Pemasukan
+                            </button>
+                            <button id="showExpenseOnly" class="bg-gradient-to-r from-red-100 to-rose-50 text-red-700 px-3 py-2 rounded-lg text-sm font-semibold hover:from-red-200 hover:to-rose-100 transition-all duration-300 border border-red-200">
+                                <i class="fas fa-minus-circle mr-2"></i> Pengeluaran
+                            </button>
+                            <button id="clearAll" class="bg-gradient-to-r from-red-100 to-red-50 text-red-700 px-3 py-2 rounded-lg text-sm font-semibold hover:from-red-200 hover:to-red-100 transition-all duration-300 border border-red-200">
+                                <i class="fas fa-trash mr-2"></i> Hapus Semua
                             </button>
                         </div>
                     </div>
 
-                    <div class="mb-4 flex justify-between items-center">
-                        <span class="text-sm text-gray-600" id="transactionInfo">Menampilkan semua transaksi</span>
-                        <span class="text-sm font-medium text-gray-700" id="transactionCount">0 transaksi</span>
+                    <div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <span class="text-sm text-gray-600 bg-gray-100 px-3 py-1.5 rounded-lg" id="transactionInfo">
+                            Menampilkan semua transaksi
+                        </span>
+                        <div class="flex items-center space-x-3">
+                            <span class="text-sm font-semibold text-gray-700 bg-gradient-to-r from-gray-100 to-gray-50 px-3 py-1.5 rounded-lg" id="transactionCount">
+                                0 transaksi
+                            </span>
+                            <button onclick="printTransactions()" class="text-gray-500 hover:text-gray-700 p-2 hover:bg-gray-100 rounded-lg transition duration-200">
+                                <i class="fas fa-print"></i>
+                            </button>
+                        </div>
                     </div>
                     
-                    <div class="overflow-x-auto max-h-96 custom-scrollbar">
+                    <div class="overflow-x-auto rounded-xl border border-gray-200 max-h-[500px] custom-scrollbar">
                         <table class="w-full">
                             <thead>
-                                <tr class="bg-gray-100 text-gray-700 text-sm uppercase sticky top-0">
-                                    <th class="py-3 px-4 text-left rounded-l-lg">Tanggal</th>
-                                    <th class="py-3 px-4 text-left">Jenis</th>
-                                    <th class="py-3 px-4 text-left">Jumlah</th>
-                                    <th class="py-3 px-4 text-left">Keterangan</th>
-                                    <th class="py-3 px-4 text-left rounded-r-lg">Aksi</th>
+                                <tr class="bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 text-sm uppercase sticky top-0">
+                                    <th class="py-4 px-6 text-left rounded-tl-xl">Tanggal</th>
+                                    <th class="py-4 px-6 text-left">Jenis</th>
+                                    <th class="py-4 px-6 text-left">Jumlah</th>
+                                    <th class="py-4 px-6 text-left">Keterangan</th>
+                                    <th class="py-4 px-6 text-left">Kategori</th>
+                                    <th class="py-4 px-6 text-left rounded-tr-xl">Aksi</th>
                                 </tr>
                             </thead>
-                            <tbody id="transactionList" class="text-gray-600">
+                            <tbody id="transactionList" class="text-gray-600 divide-y divide-gray-100">
                                 <tr id="emptyState">
-                                    <td colspan="5" class="py-8 text-center text-gray-500">
-                                        <i class="fas fa-wallet text-4xl mb-2 text-gray-300"></i>
-                                        <p>Belum ada transaksi.</p>
+                                    <td colspan="6" class="py-12 text-center text-gray-500">
+                                        <div class="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <i class="fas fa-wallet text-3xl text-gray-300"></i>
+                                        </div>
+                                        <p class="text-gray-500 font-medium mb-2">Belum ada transaksi</p>
+                                        <p class="text-sm text-gray-400">Mulai dengan mencatat pengeluaran atau pembayaran kas</p>
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
+                    
+                    <!-- Pagination -->
+                    <div class="mt-6 flex items-center justify-between">
+                        <div class="text-sm text-gray-500" id="paginationInfo">
+                            Menampilkan 0 dari 0 transaksi
+                        </div>
+                        <div class="flex space-x-2">
+                            <button id="prevPage" class="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <div id="pageNumbers" class="flex space-x-1"></div>
+                            <button id="nextPage" class="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <!-- Footer -->
+        <footer class="mt-12 pt-8 border-t border-gray-200 text-center text-gray-600 text-sm">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center space-x-2">
+                    <i class="fas fa-wallet text-blue-500"></i>
+                    <span>Buku Kas Digital v1.0</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span>Total Data Tersimpan:</span>
+                    <span class="bg-gradient-to-r from-blue-100 to-blue-50 text-blue-700 px-3 py-1 rounded-full font-semibold" id="footerStats">
+                        0 Anak • 0 Transaksi
+                    </span>
+                </div>
+                <div>
+                    <span>© 2025 Sistem Pengelolaan Kas Bulanan</span>
+                </div>
+            </div>
+        </footer>
     </div>
 
     <!-- Modal Edit Anak -->
-    <div id="editChildModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-        <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <h3 class="text-xl font-bold mb-4">Edit Data Anak</h3>
-            <form id="editChildForm">
+    <div id="editChildModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-md mx-4 animate-modal-in">
+            <h3 class="text-xl font-bold mb-6 text-gray-800 flex items-center">
+                <i class="fas fa-user-edit mr-3 text-blue-600"></i>Edit Data Anak
+            </h3>
+            <form id="editChildForm" class="space-y-5">
                 <input type="hidden" id="editChildId">
-                <div class="space-y-4">
+                <div class="space-y-5">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Nama Anak</label>
-                        <input type="text" id="editChildName" class="w-full p-2 border border-gray-300 rounded-md" required>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Nama Anak</label>
+                        <input type="text" id="editChildName" 
+                               class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-700" required>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Kelas/Group</label>
-                        <input type="text" id="editChildClass" class="w-full p-2 border border-gray-300 rounded-md">
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Kelas/Group</label>
+                        <input type="text" id="editChildClass" 
+                               class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-700">
                     </div>
                 </div>
-                <div class="flex space-x-3 mt-6">
-                    <button type="button" onclick="closeEditChildModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-md transition duration-200">
+                <div class="flex space-x-3 mt-8">
+                    <button type="button" onclick="closeEditChildModal()" class="flex-1 bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg">
                         Batal
                     </button>
-                    <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md transition duration-200">
-                        Simpan
+                    <button type="submit" class="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg">
+                        Simpan Perubahan
                     </button>
                 </div>
             </form>
@@ -380,111 +729,251 @@
     </div>
 
     <!-- Modal Edit Transaksi -->
-    <div id="editTransactionModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-        <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <h3 class="text-xl font-bold mb-4">Edit Transaksi</h3>
-            <form id="editTransactionForm">
+    <div id="editTransactionModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-md mx-4 animate-modal-in">
+            <h3 class="text-xl font-bold mb-6 text-gray-800 flex items-center">
+                <i class="fas fa-edit mr-3 text-blue-600"></i>Edit Transaksi
+            </h3>
+            <form id="editTransactionForm" class="space-y-5">
                 <input type="hidden" id="editTransactionId">
-                <div class="space-y-4">
+                <div class="space-y-5">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Jenis Transaksi</label>
-                        <select id="editTransactionType" class="w-full p-2 border border-gray-300 rounded-md">
-                            <option value="kas">Kas Masuk</option>
-                            <option value="expense">Pengeluaran</option>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Jenis Transaksi</label>
+                        <select id="editTransactionType" 
+                                class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-700">
+                            <option value="kas">💰 Kas Masuk</option>
+                            <option value="other_income">💵 Pemasukan Lain</option>
+                            <option value="expense">💸 Pengeluaran</option>
+                            <option value="initial_balance">🏦 Saldo Awal</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Jumlah</label>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Jumlah</label>
                         <div class="relative">
-                            <span class="absolute left-3 top-2 text-gray-500">Rp</span>
-                            <input type="number" id="editTransactionAmount" class="w-full pl-10 p-2 border border-gray-300 rounded-md" required>
+                            <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">Rp</span>
+                            <input type="number" id="editTransactionAmount" 
+                                   class="w-full pl-12 pr-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-700" required>
                         </div>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal</label>
-                        <input type="date" id="editTransactionDate" class="w-full p-2 border border-gray-300 rounded-md" required>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Tanggal</label>
+                        <input type="date" id="editTransactionDate" 
+                               class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-700" required>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Keterangan</label>
-                        <textarea id="editTransactionNote" class="w-full p-2 border border-gray-300 rounded-md" rows="3" required></textarea>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Keterangan</label>
+                        <textarea id="editTransactionNote" 
+                                  class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-700" rows="3" required></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Kategori</label>
+                        <input type="text" id="editTransactionCategory" 
+                               class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-700">
                     </div>
                 </div>
-                <div class="flex space-x-3 mt-6">
-                    <button type="button" onclick="closeEditTransactionModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-md transition duration-200">
+                <div class="flex space-x-3 mt-8">
+                    <button type="button" onclick="closeEditTransactionModal()" class="flex-1 bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg">
                         Batal
                     </button>
-                    <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md transition duration-200">
-                        Simpan
+                    <button type="submit" class="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg">
+                        Simpan Perubahan
                     </button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Modal Pengaturan -->
-    <div id="settingsModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-        <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <h3 class="text-xl font-bold mb-4">
-                <i class="fas fa-cog mr-2"></i>Pengaturan Sistem
+    <!-- Modal Pengaturan Saldo Awal -->
+    <div id="initialBalanceModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-md mx-4 animate-modal-in">
+            <h3 class="text-xl font-bold mb-6 text-gray-800 flex items-center">
+                <i class="fas fa-piggy-bank mr-3 text-purple-600"></i>Pengaturan Saldo Awal
             </h3>
-            <form id="settingsForm" class="space-y-4">
+            <form id="initialBalanceForm" class="space-y-5">
+                <div class="space-y-5">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Jumlah Saldo Awal</label>
+                        <div class="relative">
+                            <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">Rp</span>
+                            <input type="number" id="initialBalanceAmountInput" placeholder="0" 
+                                   class="w-full pl-12 pr-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-500/20 focus:border-purple-500 transition-all duration-300 text-gray-700" required>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-5">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Bulan</label>
+                            <select id="initialBalanceMonth" 
+                                    class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-500/20 focus:border-purple-500 transition-all duration-300 text-gray-700">
+                                <option value="Januari">Januari</option>
+                                <option value="Februari">Februari</option>
+                                <option value="Maret">Maret</option>
+                                <option value="April">April</option>
+                                <option value="Mei">Mei</option>
+                                <option value="Juni">Juni</option>
+                                <option value="Juli">Juli</option>
+                                <option value="Agustus">Agustus</option>
+                                <option value="September">September</option>
+                                <option value="Oktober">Oktober</option>
+                                <option value="November">November</option>
+                                <option value="Desember">Desember</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Tahun</label>
+                            <input type="number" id="initialBalanceYear" min="2000" max="2100" value="2024" 
+                                   class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-500/20 focus:border-purple-500 transition-all duration-300 text-gray-700" required>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Keterangan</label>
+                        <textarea id="initialBalanceNoteInput" placeholder="Catatan saldo awal" 
+                                  class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-500/20 focus:border-purple-500 transition-all duration-300 text-gray-700" rows="2">Saldo awal bulan</textarea>
+                    </div>
+                    <div class="bg-gradient-to-r from-purple-50 to-violet-50 p-4 rounded-xl border border-purple-200">
+                        <p class="text-sm text-purple-700">
+                            <i class="fas fa-info-circle mr-2"></i>
+                            Saldo awal akan otomatis dihitung dari saldo bulan sebelumnya jika ada.
+                        </p>
+                    </div>
+                </div>
+                <div class="flex space-x-3 mt-8">
+                    <button type="button" onclick="closeInitialBalanceModal()" class="flex-1 bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg">
+                        Batal
+                    </button>
+                    <button type="submit" class="flex-1 bg-gradient-to-r from-purple-600 to-violet-700 hover:from-purple-700 hover:to-violet-800 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg">
+                        Simpan Saldo
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Pengaturan Sistem -->
+    <div id="settingsModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-md mx-4 animate-modal-in max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold mb-6 text-gray-800 flex items-center">
+                <i class="fas fa-cog mr-3 text-blue-600"></i>Pengaturan Sistem
+            </h3>
+            <form id="settingsForm" class="space-y-6">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Nominal Kas per Anak</label>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Nominal Kas per Anak</label>
                     <div class="relative">
-                        <span class="absolute left-3 top-2 text-gray-500">Rp</span>
-                        <input type="number" id="kasAmountSetting" class="w-full pl-10 p-2 border border-gray-300 rounded-md" value="10000" required>
+                        <span class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">Rp</span>
+                        <input type="number" id="kasAmountSetting" 
+                               class="w-full pl-12 pr-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-700" value="10000" required>
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Tema Warna</label>
-                    <select id="themeSetting" class="w-full p-2 border border-gray-300 rounded-md">
-                        <option value="blue">Biru Default</option>
-                        <option value="green">Hijau</option>
-                        <option value="purple">Ungu</option>
-                        <option value="red">Merah</option>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Tema Warna</label>
+                    <select id="themeSetting" 
+                            class="w-full px-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-gray-700">
+                        <option value="blue">🎨 Biru Default</option>
+                        <option value="green">🎨 Hijau</option>
+                        <option value="purple">🎨 Ungu</option>
+                        <option value="red">🎨 Merah</option>
                     </select>
                 </div>
-                <div class="flex items-center">
-                    <input type="checkbox" id="backupAuto" class="mr-2">
-                    <label class="text-sm text-gray-700">Backup otomatis setiap minggu</label>
+                
+                <div class="space-y-4">
+                    <div class="flex items-center">
+                        <input type="checkbox" id="backupAuto" class="w-5 h-5 text-blue-600 rounded focus:ring-blue-500">
+                        <label class="ml-3 text-sm text-gray-700">Backup otomatis setiap minggu</label>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="notifications" class="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" checked>
+                        <label class="ml-3 text-sm text-gray-700">Notifikasi reminder bayar kas</label>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="autoCalculateBalance" class="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" checked>
+                        <label class="ml-3 text-sm text-gray-700">Hitung otomatis saldo bulan lalu</label>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="monthlyReminder" class="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" checked>
+                        <label class="ml-3 text-sm text-gray-700">Reminder bulanan otomatis</label>
+                    </div>
                 </div>
-                <div class="flex items-center">
-                    <input type="checkbox" id="notifications" class="mr-2" checked>
-                    <label class="text-sm text-gray-700">Notifikasi reminder bayar kas</label>
-                </div>
-                <div class="pt-4 border-t border-gray-200">
-                    <button type="button" onclick="backupData()" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md transition duration-200 mb-2">
-                        <i class="fas fa-download mr-2"></i> Backup Data Sekarang
+                
+                <div class="pt-6 border-t border-gray-200 space-y-4">
+                    <button type="button" onclick="backupData()" class="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg flex items-center justify-center">
+                        <i class="fas fa-download mr-3"></i> Backup Data Sekarang
                     </button>
-                    <button type="button" onclick="showTutorial()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition duration-200">
-                        <i class="fas fa-question-circle mr-2"></i> Lihat Tutorial
+                    <button type="button" onclick="restoreData()" class="w-full bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg flex items-center justify-center">
+                        <i class="fas fa-upload mr-3"></i> Restore Data
+                    </button>
+                    <button type="button" onclick="showTutorial()" class="w-full bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg flex items-center justify-center">
+                        <i class="fas fa-question-circle mr-3"></i> Lihat Tutorial
                     </button>
                 </div>
-                <div class="flex space-x-3 mt-4">
-                    <button type="button" onclick="closeSettingsModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-md transition duration-200">
+                
+                <div class="flex space-x-3 mt-8">
+                    <button type="button" onclick="closeSettingsModal()" class="flex-1 bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg">
                         Batal
                     </button>
-                    <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md transition duration-200">
-                        Simpan
+                    <button type="submit" class="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg">
+                        Simpan Pengaturan
                     </button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-        <div class="bg-white rounded-xl p-6 flex items-center space-x-3">
-            <div class="loading"></div>
-            <span class="text-gray-700">Memproses...</span>
+    <!-- Modal Notifikasi -->
+    <div id="notificationsModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden animate-modal-in">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-xl font-bold text-gray-800 flex items-center">
+                    <i class="fas fa-bell mr-3 text-yellow-500"></i>Notifikasi
+                    <span id="unreadCount" class="bg-red-500 text-white text-sm rounded-full px-2 py-1 ml-2">0</span>
+                </h3>
+                <div class="flex items-center space-x-3">
+                    <button onclick="markAllNotificationsAsRead()" class="text-sm bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-3 py-1.5 rounded-lg font-medium transition-all duration-300">
+                        Tandai Semua Dibaca
+                    </button>
+                    <button onclick="closeNotificationsModal()" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="overflow-y-auto max-h-[60vh] custom-scrollbar" id="notificationsList">
+                <!-- Notifikasi akan diisi oleh JavaScript -->
+            </div>
+            
+            <div class="mt-6 pt-6 border-t border-gray-200">
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="clearAllNotifications()" class="bg-gradient-to-r from-red-100 to-red-50 text-red-700 hover:from-red-200 hover:to-red-100 font-medium py-2.5 rounded-xl transition-all duration-300 border border-red-200 flex items-center justify-center">
+                        <i class="fas fa-trash mr-2"></i> Hapus Semua
+                    </button>
+                    <button onclick="closeNotificationsModal()" class="bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 hover:from-gray-200 hover:to-gray-100 font-medium py-2.5 rounded-xl transition-all duration-300 border border-gray-200 flex items-center justify-center">
+                        <i class="fas fa-times mr-2"></i> Tutup
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Konfirmasi Hapus -->
+    <div id="confirmModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-md mx-4 animate-modal-in">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-gradient-to-r from-red-100 to-rose-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-exclamation-triangle text-2xl text-red-500"></i>
+                </div>
+                <h3 class="text-xl font-bold text-gray-800 mb-2" id="confirmTitle">Konfirmasi Hapus</h3>
+                <p class="text-gray-600 mb-6" id="confirmMessage">Apakah Anda yakin ingin menghapus data ini?</p>
+                <div class="flex space-x-3">
+                    <button onclick="closeConfirmModal()" class="flex-1 bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300">
+                        Batal
+                    </button>
+                    <button onclick="processConfirmation()" class="flex-1 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300" id="confirmAction">
+                        Hapus
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
     <!-- Script -->
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
